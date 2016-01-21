@@ -62,6 +62,11 @@ public:
   {
     const StorageSite& cells = mesh.getCells();
 
+    //added for pressure extrapolation
+    _pressureGradientModel.clearGradientMatrix(mesh);
+    _pressureGradientModel.computeInterior();
+    //end pressure extrapolation additions
+
     const TArray& cellVolume = dynamic_cast<const TArray&>(_geomFields.volume[cells]);
 
     const MultiField::ArrayIndex vIndex(&_flowFields.velocity,&cells);
@@ -69,13 +74,42 @@ public:
     GradArray& pGradCell = dynamic_cast<GradArray&>(_flowFields.pressureGradient[cells]);
     
     const int nCells = cells.getSelfCount();
-
     
     const StorageSite& faces = mesh.getFaces();
     const CRConnectivity& faceCells = mesh.getAllFaceCells();
     const VectorT3Array& faceArea =
       dynamic_cast<const VectorT3Array&>(_geomFields.area[faces]);
     const TArray& facePressure = dynamic_cast<const TArray&>(_flowFields.pressure[faces]);
+
+    //extrapolate pressure at boundary faces
+
+    const VectorT3Array& cellCentroid =
+      dynamic_cast<const VectorT3Array&>(_geomFields.coordinate[cells]);
+    const TArray& cellPressure = dynamic_cast<const TArray&>(_flowFields.pressure[cells]);
+
+    foreach(const FaceGroupPtr fgPtr, mesh.getBoundaryFaceGroups())
+    {
+        const FaceGroup& fg = *fgPtr;
+        const StorageSite& bfaces = fg.site;
+	const int faceCount = bfaces.getCount();
+	const CRConnectivity& bfaceCells = mesh.getFaceCells(bfaces);
+	TArray& bfacePressure = dynamic_cast<TArray&>(_flowFields.pressure[bfaces]);
+
+	const VectorT3Array& faceCentroid =
+	  dynamic_cast<const VectorT3Array&>(_geomFields.coordinate[bfaces]);
+
+	for(int f=0; f<faceCount; f++)
+	{
+	  const int c0 = bfaceCells(f,0);
+	  VectorT3 ds = faceCentroid[f]-cellCentroid[c0];
+                
+	  bfacePressure[f] = cellPressure[c0]+ds[0]*pGradCell[c0][0]+ds[1]*pGradCell[c0][1]+ds[2]*pGradCell[c0][2];
+	}
+    }
+
+    _pressureGradientModel.clearGradientMatrix(mesh);
+
+    //end face pressure extrapolation
 
     pGradCell.zero();
 

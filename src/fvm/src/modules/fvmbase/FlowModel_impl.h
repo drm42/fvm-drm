@@ -28,7 +28,8 @@
 #include "VectorTranspose.h"
 #include "DiffusionDiscretization.h"
 #include "ConvectionDiscretization.h"
-#include "TimeDerivativeDiscretizationVarDen.h"
+#include "TimeDerivativeDiscretization.h"
+#include "SourceDiscretization.h"
 #include "Underrelaxer.h"
 #include "MomentumPressureGradientDiscretization.h"
 #include "AMG.h"
@@ -171,10 +172,6 @@ public:
         uparallelCell ->zero();
         _flowFields.uparallel.addArray(cells,uparallelCell);
 
-	shared_ptr<VectorT3Array> sourceCell(new VectorT3Array(cells.getCount()));
-        sourceCell ->zero();
-        _flowFields.source.addArray(cells,sourceCell);
-
       shared_ptr<VectorT3Array> tauCell(new VectorT3Array(faces.getCount()));
         tauCell ->zero();
         _flowFields.tau.addArray(faces,tauCell);
@@ -206,14 +203,17 @@ public:
         _flowFields.pressure.addArray(cells,pCell);
         _flowFields.pressure.addArray(faces,pFace);
 
+	shared_ptr<VectorT3Array> sCell(new VectorT3Array(cells.getCountLevel1()));
+        VectorT3 initialSource;
+        initialVelocity[0] = T(0.0);
+        initialVelocity[1] = T(0.0);
+        initialVelocity[2] = T(0.0);
+        *sCell = initialSource;
+	_flowFields.source.addArray(cells,sCell);
 
         shared_ptr<TArray> rhoCell(new TArray(cells.getCountLevel1()));
         *rhoCell = vc["density"];
         _flowFields.density.addArray(cells,rhoCell);
-
-	shared_ptr<TArray> rhoCellN1(new TArray(cells.getCountLevel1()));
-        *rhoCellN1 = vc["density"];
-        _flowFields.densityN1.addArray(cells,rhoCellN1);
 
         shared_ptr<TArray> muCell(new TArray(cells.getCountLevel1()));
         *muCell = vc["viscosity"];
@@ -366,11 +366,6 @@ public:
         VectorT3Array& vN1 =
           dynamic_cast<VectorT3Array&>(_flowFields.velocityN1[cells]);
 
-	TArray& rho =
-          dynamic_cast<TArray&>(_flowFields.density[cells]);
-        TArray& rhoN1 =
-          dynamic_cast<TArray&>(_flowFields.densityN1[cells]);
-
         if (_options.timeDiscretizationOrder > 1)
         {
             VectorT3Array& vN2 =
@@ -378,7 +373,6 @@ public:
             vN2 = vN1;
         }
         vN1 = v;
-	rhoN1 = rho;
     }
   }
  const Field& getViscosityField() const
@@ -616,8 +610,8 @@ public:
     shared_ptr<Discretization>
       sd(new SourceDiscretization<VectorT3>
          (_meshes,_geomFields, 
-          _flowFields.velocity,
-          _flowFields.source));
+    	  _flowFields.velocity,
+    	  _flowFields.source));
 
     discretizations.push_back(dd);
     discretizations.push_back(cd);
@@ -627,13 +621,12 @@ public:
     if (_options.transient)
     {
         shared_ptr<Discretization>
-          td(new TimeDerivativeDiscretizationVarDen<VectorT3,DiagTensorT3,T>
+          td(new TimeDerivativeDiscretization<VectorT3,DiagTensorT3,T>
              (_meshes,_geomFields,
               _flowFields.velocity,
               _flowFields.velocityN1,
               _flowFields.velocityN2,
               _flowFields.density,
-	      _flowFields.densityN1,
               _options["timeStep"]));
         
         discretizations.push_back(td);
@@ -1095,8 +1088,6 @@ public:
             // this block computes the net sum of d(rho)/dt over all the cells
             const TArray& density =
               dynamic_cast<const TArray&>(_flowFields.density[cells]);	
-	    const TArray& densityN1 =
-              dynamic_cast<const TArray&>(_flowFields.densityN1[cells]);	
             const TArray& cellVolume =
               dynamic_cast<const TArray&>(_geomFields.volume[cells]);
             const int nCells = cells.getSelfCount();
@@ -1129,8 +1120,7 @@ public:
 		for(int c=0; c<nCells; c++)
 		{       
 		    const T rhobydT = density[c]/_dT;
-		    const T rhobydTN1 = densityN1[c]/_dT;
-		    netFlux -= rhobydT*cellVolume[c] - rhobydTN1*cellVolumeN1[c];
+		    netFlux -= rhobydT*(cellVolume[c] - cellVolumeN1[c]);
 		}
 	    }
 
@@ -1151,30 +1141,6 @@ public:
                     netFlux += density[c0]*dot(faceVel[f],faceArea[f]);
                 }
             }
-        }
-	else
-        {
-
-            // this block computes the net sum of d(rho)/dt over all the cells
-            const TArray& density =
-              dynamic_cast<const TArray&>(_flowFields.density[cells]);	
-	    const TArray& densityN1 =
-              dynamic_cast<const TArray&>(_flowFields.densityN1[cells]);	
-            const TArray& cellVolume =
-              dynamic_cast<const TArray&>(_geomFields.volume[cells]);
-            const int nCells = cells.getSelfCount();
-            T _dT(_options["timeStep"]);
-            T onePointFive(1.5);
-            T two(2.0);
-            T pointFive(0.5);
-
-	    // first order time discretization
-	    for(int c=0; c<nCells; c++)
-	    {       
-	        const T rhobydT = density[c]/_dT;
-		const T rhobydTN1 = densityN1[c]/_dT;
-		netFlux -= rhobydT*cellVolume[c] - rhobydTN1*cellVolume[c];
-	    }
         }
     }
   
