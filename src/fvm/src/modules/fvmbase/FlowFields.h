@@ -20,6 +20,7 @@ struct FlowFields
   Field momentumFlux;
   Field viscosity;
   Field density;
+  Field densityN1;
   Field source;
   Field continuityResidual;
   Field velocityN1;

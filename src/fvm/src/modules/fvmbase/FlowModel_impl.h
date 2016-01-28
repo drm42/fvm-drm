@@ -28,7 +28,7 @@
 #include "VectorTranspose.h"
 #include "DiffusionDiscretization.h"
 #include "ConvectionDiscretization.h"
-#include "TimeDerivativeDiscretization.h"
+#include "TimeDerivativeDiscretizationVarDen.h"
 #include "SourceDiscretization.h"
 #include "Underrelaxer.h"
 #include "MomentumPressureGradientDiscretization.h"
@@ -215,6 +215,10 @@ public:
         *rhoCell = vc["density"];
         _flowFields.density.addArray(cells,rhoCell);
 
+	shared_ptr<TArray> rhoCellN1(new TArray(cells.getCountLevel1()));
+        *rhoCellN1 = vc["density"];
+	_flowFields.densityN1.addArray(cells,rhoCellN1);
+
         shared_ptr<TArray> muCell(new TArray(cells.getCountLevel1()));
         *muCell = vc["viscosity"];
         _flowFields.viscosity.addArray(cells,muCell);
@@ -366,6 +370,11 @@ public:
         VectorT3Array& vN1 =
           dynamic_cast<VectorT3Array&>(_flowFields.velocityN1[cells]);
 
+	TArray& rho =
+          dynamic_cast<TArray&>(_flowFields.density[cells]);
+        TArray& rhoN1 =
+          dynamic_cast<TArray&>(_flowFields.densityN1[cells]);
+
         if (_options.timeDiscretizationOrder > 1)
         {
             VectorT3Array& vN2 =
@@ -373,6 +382,7 @@ public:
             vN2 = vN1;
         }
         vN1 = v;
+	rhoN1 = rho;
     }
   }
  const Field& getViscosityField() const
@@ -621,12 +631,13 @@ public:
     if (_options.transient)
     {
         shared_ptr<Discretization>
-          td(new TimeDerivativeDiscretization<VectorT3,DiagTensorT3,T>
+          td(new TimeDerivativeDiscretizationVarDen<VectorT3,DiagTensorT3,T>
              (_meshes,_geomFields,
               _flowFields.velocity,
               _flowFields.velocityN1,
               _flowFields.velocityN2,
               _flowFields.density,
+	      _flowFields.densityN1,
               _options["timeStep"]));
         
         discretizations.push_back(td);

@@ -13,6 +13,7 @@ FlowFields::FlowFields(const string baseName) :
   momentumFlux(baseName + ".momentumFlux"),
   viscosity(baseName + ".viscosity"),
   density(baseName + ".density"),
+  densityN1(baseName + ".densityN1"),
   source(baseName + ".source"),
   continuityResidual(baseName + ".continuityResidual"),
   velocityN1(baseName + ".velocityN1"),
