@@ -1091,6 +1091,25 @@ public:
             dFluxdFlux.unitize();
         }
 
+	//add unsteady terms due to variable density
+	const TArray& density =
+	  dynamic_cast<const TArray&>(_flowFields.density[cells]);
+	const TArray& densityN1 =
+          dynamic_cast<const TArray&>(_flowFields.densityN1[cells]);
+	const TArray& cellVolume =
+	  dynamic_cast<const TArray&>(_geomFields.volume[cells]);
+	const int nCells = cells.getSelfCount();
+	T _dT(_options["timeStep"]);
+	
+	TArray& rCell = dynamic_cast<TArray&>(b[pIndex]);
+
+	for(int c=0; c<nCells; c++)
+	{
+	  const T VbydT = cellVolume[c]/_dT;
+	  rCell[c] -= VbydT*(density[c] - densityN1[c]);  
+	}
+
+
 	// add additional imbalance to netFlux due to transient term
 	// when we have deforming mesh
         if (_geomFields.volumeN1.hasArray(cells))
@@ -1218,7 +1237,7 @@ public:
         // first cell to have a zero correction to account for this.
         
 
-      setDirichlet(matrix,b);
+	setDirichlet(matrix,b);
 
     }
   }
