@@ -1289,9 +1289,15 @@ public:
 
         TArray& r = dynamic_cast<TArray&>(_flowFields.continuityResidual[cells]);
         const TArray& massFlux = dynamic_cast<const TArray&>(_flowFields.massFlux[faces]);
+	const TArray& density = dynamic_cast<const TArray&>(_flowFields.density[cells]);
+	const TArray& densityN1 = dynamic_cast<const TArray&>(_flowFields.densityN1[cells]);
+	const TArray& cellVolume = dynamic_cast<const TArray&>(_geomFields.volume[cells]);
 
         const CRConnectivity& faceCells = mesh.getAllFaceCells();
         const int nFaces = faces.getCount();
+	const int nCells = cells.getSelfCount();
+
+	T _dT(_options["timeStep"]);
 
         r.zero();
         for(int f=0; f<nFaces; f++)
@@ -1302,6 +1308,12 @@ public:
             r[c0] += massFlux[f];
             r[c1] -= massFlux[f];
         }
+
+	for(int c=0; c<nCells; c++)
+	{
+	  const T VbydT = cellVolume[c]/_dT;
+	  r[c] += VbydT*(density[c] - densityN1[c]);
+	}
     }
   }
 
